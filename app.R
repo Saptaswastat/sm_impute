@@ -2,15 +2,19 @@ library(shiny)
 library(DT)
 library(VIM)
 library(ggplot2)
+library(mice)
 
 ui <- fluidPage(
-  titlePanel("Missing Data Imputation Tool"),
+  titlePanel(" Missing Data Imputation Tool"),
   sidebarLayout(
     sidebarPanel(
       fileInput("file", "Upload CSV File", accept = ".csv"),
       uiOutput("select_columns"),
       selectInput("method", "Imputation Method", 
-                  choices = c("Mean" = "mean", "Median" = "median", "kNN (from VIM)" = "knn")),
+                  choices = c("Mean" = "mean", 
+                              "Median" = "median", 
+                              "kNN (from VIM)" = "knn",
+                              "MICE" = "mice")),
       actionButton("impute_btn", "Impute Missing Values", icon = icon("magic"))
     ),
     mainPanel(
@@ -25,13 +29,11 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  # Reactive expression to load data
   raw_data <- reactive({
     req(input$file)
     read.csv(input$file$datapath)
   })
   
-  # Select only numeric columns for imputation
   output$select_columns <- renderUI({
     req(raw_data())
     numeric_vars <- names(raw_data())[sapply(raw_data(), is.numeric)]
@@ -39,20 +41,17 @@ server <- function(input, output, session) {
                        choices = numeric_vars, selected = numeric_vars)
   })
   
-  # Plot missing values
   output$missing_plot <- renderPlot({
     req(raw_data())
     aggr(raw_data(), numbers = TRUE, sortVars = TRUE, 
          cex.axis = 0.7, gap = 3, ylab = c("Missing Data", "Pattern"))
   })
   
-  # Show original data
   output$data_table <- renderDT({
     req(raw_data())
     datatable(raw_data(), options = list(scrollX = TRUE))
   })
   
-  # Imputation logic
   imputed_data <- eventReactive(input$impute_btn, {
     df <- raw_data()
     cols <- input$columns
@@ -67,6 +66,9 @@ server <- function(input, output, session) {
       })
     } else if (input$method == "knn") {
       df <- kNN(df, variable = cols, k = 5, imp_var = FALSE)
+    } else if (input$method == "mice") {
+      imputed <- mice(df[, cols], m = 1, method = "pmm", printFlag = FALSE)
+      df[cols] <- complete(imputed)
     }
     
     df
@@ -82,4 +84,4 @@ shinyApp(ui, server)
 
 
 
-# shiny::runApp("C:/Users/SAPTASWA MANNA/OneDrive/Documents/sm_impute/app.R")
+
